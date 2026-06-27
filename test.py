@@ -1,38 +1,29 @@
 import requests
+import re
 
 def test_connection():
-    # ফেসবুক লাইটের এন্ডপয়েন্ট
-    url = "https://mbasic.facebook.com/"
-    
-    # ব্রাউজার সেশন তৈরি
     session = requests.Session()
-    
-    # সবথেকে গুরুত্বপূর্ণ হেডারসমূহ
     headers = {
         'User-Agent': 'Mozilla/5.0 (Linux; Android 10; SM-G960F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
     }
 
-    try:
-        print("[*] ফেসবুকের সাথে কানেক্ট হচ্ছে...")
-        # প্রথমে মেইন পেজ থেকে কুকি সংগ্রহ করা
-        r = session.get(url, headers=headers, timeout=15)
+    print("[*] টোকেন খোঁজা হচ্ছে...")
+    r = session.get("https://mbasic.facebook.com/login/identify/?ctx=recover", headers=headers)
+    
+    # পেজ থেকে LSD টোকেন বের করা
+    lsd_match = re.search(r'name="lsd" value="([^"]+)"', r.text)
+    
+    if lsd_match:
+        lsd = lsd_match.group(1)
+        print(f"[✓] টোকেন পাওয়া গেছে: {lsd}")
+        print("[*] এখন রিকভারি পেজে ট্রাই করছি...")
         
-        print(f"[*] স্ট্যাটাস কোড: {r.status_code}")
-        
-        if r.status_code == 200:
-            print("[✓] কানেকশন সফল! ফেসবুক কুকি গ্রহণ করেছে।")
-            # এবার রিকভারি পেজে যাওয়ার চেষ্টা
-            r2 = session.get("https://mbasic.facebook.com/login/identify/?ctx=recover", headers=headers, timeout=15)
-            print(f"[*] রিকভারি পেজ স্ট্যাটাস: {r2.status_code}")
-        else:
-            print(f"[!] কানেকশনে সমস্যা: {r.status_code}")
-            
-    except Exception as e:
-        print(f"[✗] এরর: {e}")
+        # ডাটা পাঠিয়ে চেক করা
+        data = {'lsd': lsd, 'email': '01712345678', 'did_submit': 'Search'}
+        r2 = session.post("https://mbasic.facebook.com/login/identify/?ctx=recover", data=data, headers=headers)
+        print(f"[*] স্ট্যাটাস কোড: {r2.status_code}")
+    else:
+        print("[!] টোকেন পাওয়া যায়নি! ফেসবুক সম্ভবত স্ক্রিপ্ট ব্লক করেছে।")
 
 if __name__ == '__main__':
     test_connection()
