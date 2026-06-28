@@ -2,64 +2,55 @@ import cloudscraper
 from bs4 import BeautifulSoup
 import time
 
-# কালার কোড
-GREEN = '\033[92m'
-YELLOW = '\033[93m'
-RED = '\033[91m'
-RESET = '\033[0m'
-BOLD = '\033[1m'
-
 scraper = cloudscraper.create_scraper()
 
-def log(msg, color=RESET):
-    print(f"{color}[*] {msg}{RESET}")
-
-def get_page(url, data=None):
-    if data:
-        return scraper.post(url, data=data)
-    return scraper.get(url)
+def log(msg, color=""):
+    print(f"{color}[*] {msg}\033[0m")
 
 def main():
-    log(f"{BOLD}FB AUTO RECOVERY STARTING...{RESET}", GREEN)
-    phone = input(f"{YELLOW}➜ Enter Mobile Number: {RESET}")
+    print("\n\033[92m[+] FB AUTO RECOVERY TOOL v2.0\033[0m\n")
+    phone = input("\033[93m➜ Enter Mobile Number: \033[0m").strip()
     
-    # স্টেপ ১: আইডি সার্চ করা
     url = "https://mbasic.facebook.com/login/identify/?ctx=recover"
-    r = get_page(url)
     
-    # ফর্মের টোকেন বের করা
+    log("Connecting to Facebook...")
+    r = scraper.get(url)
+    
     soup = BeautifulSoup(r.text, 'html.parser')
-    lsd = soup.find('input', {'name': 'lsd'})['value']
-    jazoest = soup.find('input', {'name': 'jazoest'})['value']
     
-    log("Searching for account...")
-    data = {'lsd': lsd, 'jazoest': jazoest, 'email': phone, 'did_submit': 'Search'}
-    r2 = get_page(url, data=data)
+    # টোকেন খোঁজার লজিক
+    lsd_tag = soup.find('input', {'name': 'lsd'})
+    jazoest_tag = soup.find('input', {'name': 'jazoest'})
     
-    # স্টেপ ২: পেজ চেনা (Decision Logic)
-    content = r2.text
-    
-    if "No search results" in content:
-        log("Account not found!", RED)
+    if lsd_tag and jazoest_tag:
+        lsd = lsd_tag['value']
+        jazoest = jazoest_tag['value']
+        log(f"Tokens found (LSD: {lsd[:5]}...)")
         
-    elif "Choose your account" in content:
-        log("Multiple accounts found! (Logic: Picking first one)", YELLOW)
-        # এখানে আমরা পরবর্তী আইডি নির্বাচনের লজিক বসাবো
+        log("Searching for account...")
+        data = {'lsd': lsd, 'jazoest': jazoest, 'email': phone, 'did_submit': 'Search'}
+        r2 = scraper.post(url, data=data)
         
-    elif "Enter password" in content:
-        log("Password page detected. Looking for 'Try another way'...", YELLOW)
-        # এখানে 'Try another way' বাটনের লিংক ক্লিক করার লজিক বসবে
+        content = r2.text
         
-    elif "Confirm your account" in content:
-        log("Success! SMS option reached.", GREEN)
-        
-    elif "Enter the letters and numbers" in content:
-        log("CAPTCHA DETECTED! Manually solve it.", RED)
-        
+        # পেজ চেনার লজিক
+        if "No search results" in content:
+            log("Account not found!", "\033[91m")
+        elif "Choose your account" in content:
+            log("Multiple accounts found!", "\033[93m")
+        elif "Enter password" in content:
+            log("Password page detected!", "\033[93m")
+        elif "Confirm your account" in content:
+            log("Success! SMS option reached.", "\033[92m")
+        elif "Enter the letters and numbers" in content:
+            log("CAPTCHA DETECTED!", "\033[91m")
+        else:
+            log("Unknown page response received.")
+            
     else:
-        log("Unknown page detected! Please check logs.", RED)
-        # ডিবাগ করার জন্য পুরো পেজটা পরে দেখবো
-        
+        log("Could not find tokens! Printing partial page content for debug:", "\033[91m")
+        print(r.text[:300]) 
+
 if __name__ == '__main__':
     try:
         main()
