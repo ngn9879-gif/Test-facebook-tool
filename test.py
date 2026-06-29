@@ -1,30 +1,33 @@
 import cloudscraper
+import json
+import re
 
-def main():
+def get_tokens():
     scraper = cloudscraper.create_scraper()
-    # আমরা সরাসরি একটি সেশন শুরু করছি
-    url = "https://lite.facebook.com/login/identify/?ctx=recover"
+    # আমরা ফেসবুকের মেইন পেজ থেকে টোকেন সংগ্রহ করব
+    url = "https://m.facebook.com/"
     
-    print("[*] Bypassing Security Challenge...")
-    
-    # এবার আমরা রিকোয়েস্ট পাঠাচ্ছি 'Browser-like' হেডার দিয়ে
-    r = scraper.get(url, headers={
+    headers = {
         'User-Agent': 'Mozilla/5.0 (Linux; Android 10; SM-G960F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-        'Referer': 'https://lite.facebook.com/',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    })
+    }
     
-    # পুরো পেজটা না দেখে আমরা শুধু দেখব সে আমাদের কোনো 'LSD' টোকেন দিচ্ছে কি না
-    if 'lsd' in r.text:
-        print("[✓] LSD Token Found!")
+    print("[*] Connecting to Facebook to fetch tokens...")
+    r = scraper.get(url, headers=headers)
+    
+    # টোকেন খোঁজার লজিক
+    dtsg_match = re.search(r'"dtsg":"([^"]+)"', r.text)
+    jazoest_match = re.search(r'"jazoest":"([^"]+)"', r.text)
+    
+    if dtsg_match and jazoest_match:
+        dtsg = dtsg_match.group(1)
+        jazoest = jazoest_match.group(1)
+        print(f"\n[✓] Tokens Found!")
+        print(f"[+] fb_dtsg : {dtsg}")
+        print(f"[+] jazoest : {jazoest}")
+        return dtsg, jazoest
     else:
-        print("[!] Still no tokens. Let's look for form inputs:")
-        # এখানে আমরা দেখব পেজে কোন কোন ইনপুট ফিল্ড আছে
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(r.text, 'html.parser')
-        inputs = soup.find_all('input')
-        for i in inputs:
-            print(f"Found input name: {i.get('name')}")
+        print("\n[!] Tokens not found! Re-checking...")
+        return None, None
 
 if __name__ == '__main__':
-    main()
+    get_tokens()
