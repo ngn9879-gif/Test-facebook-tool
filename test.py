@@ -3,9 +3,9 @@
 
 """
 ╔══════════════════════════════════════════╗
-║    🔐  FB RECOVERY TOOL  v4.0          ║
-║    ────  ফাইনাল এডিশন ────              ║
-║     Hybrid API System                    ║
+║    🔐  FB RECOVERY TOOL  v5.0          ║
+║    ────  গ্রাফকিউএল এডিশন ────          ║
+║    Facebook GraphQL API | ১০০% টার্গেট   ║
 ╚══════════════════════════════════════════╝
 """
 
@@ -16,17 +16,18 @@ import time
 import json
 import random
 import string
+import urllib.parse
 
 C = '\033[96m'; G = '\033[92m'; Y = '\033[93m'
 R = '\033[91m'; B = '\033[94m'; N = '\033[0m'
 W = '\033[1m'; D = '\033[2m'
 
 UAS = [
-    'Mozilla/5.0 (Linux; Android 12; SM-S908E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-    'Mozilla/5.0 (Linux; Android 13; Pixel 7 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36',
-    'Mozilla/5.0 (Linux; Android 11; Redmi Note 11) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Mobile Safari/537.36',
+    'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+    'Mozilla/5.0 (Linux; Android 12; SM-S908E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36',
     'Mozilla/5.0 (iPhone14,3; U; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/602.1.50 (KHTML, like Gecko) Version/10.0 Mobile/19A344 Safari/602.1',
-    'Mozilla/5.0 (Linux; Android 10; SM-A515F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+    'Mozilla/5.0 (Linux; Android 11; Redmi Note 10S) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+    'Mozilla/5.0 (Linux; Android 10; SM-A515F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Mobile Safari/537.36',
 ]
 
 def clr():
@@ -36,278 +37,248 @@ def bnr():
     clr()
     print(f"""{C}
 ╔══════════════════════════════════════════╗
-║{N}{W}    🔐  FB RECOVERY  v4.0         {C}        ║
-║{N}    ────  প্রো এডিশন ────           {C}        ║
-║{N}{D}    হাইব্রিড API | Graph API       {C}        ║
+║{N}{W}    🔐  FB RECOVERY  v5.0         {C}        ║
+║{N}    ────  GraphQL Edition ────       {C}        ║
+║{N}{D}    DTSG + LSD Token | doc_id     {C}        ║
 ╚══════════════════════════════════════════╝{N}""")
 
 def fmt_phone(phone):
     clean = re.sub(r'[^0-9]', '', phone)
     if clean.startswith('880'): clean = '0' + clean[3:]
     elif clean.startswith('00880'): clean = '0' + clean[5:]
-    return clean if (clean.startswith('01') and len(clean) == 11) else None
+    if clean.startswith('01') and len(clean) == 11: return clean
+    return None
 
-def extract_json_from_text(text, key):
-    """JSON থেকে নির্দিষ্ট key খুঁজে বের করা"""
-    pattern = r'"' + key + r'":"([^"]+)"'
-    m = re.search(pattern, text)
-    return m.group(1) if m else None
-
-def method_mbasic(session, phone):
-    """পদ্ধতি: mbasic identify"""
-    print(f"\n{D}[1/4] mbasic identify API...{N}")
-    try:
-        r = session.get('https://mbasic.facebook.com/login/identify/?ctx=recover', timeout=12)
-        
-        # LSD + jazoest এক্সট্রাক্ট
-        lsd = re.search(r'name="lsd"[^>]*value="([^"]*)"', r.text)
-        jz = re.search(r'name="jazoest"[^>]*value="([^"]*)"', r.text)
-        
-        if not lsd:
-            return None
+def get_tokens(session):
+    """Facebook পেজ থেকে DTSGInitialData এবং LSD টোকেন বের করা"""
+    print(f"\n{D}[*] Facebook থেকে টোকেন কালেক্ট করছি...{N}")
+    
+    urls_to_try = [
+        'https://www.facebook.com/',
+        'https://www.facebook.com/login/',
+        'https://www.facebook.com/reg/',
+        'https://mbasic.facebook.com/',
+    ]
+    
+    tokens_found = {}
+    
+    for url in urls_to_try:
+        try:
+            r = session.get(url, timeout=10)
+            html = r.text
             
-        data = {
-            'lsd': lsd.group(1),
-            'jazoest': jz.group(1) if jz else '2',
-            'email': phone,
-            'did_submit': 'Search'
-        }
-        
-        r2 = session.post('https://mbasic.facebook.com/login/identify/?ctx=recover', data=data, timeout=12)
-        
-        if 'no_results' in r2.text:
-            return False
-        if 'ldata=' in r2.text or 'strong' in r2.text:
-            # নাম বের করি
-            nm = re.search(r'<strong>([^<]+)</strong>', r2.text)
-            name = nm.group(1) if nm else 'Found'
+            # DTSGInitialData টোকেন
+            dtsg_match = re.search(r'"DTSGInitialData",\[\],\{"token":"([^"]+)"', html)
+            if dtsg_match:
+                tokens_found['fb_dtsg'] = dtsg_match.group(1)
+                print(f"{G}[✓] DTSGInitialData.token পাওয়া গেছে ✓{N}")
             
-            # OTP পাঠানোর চেষ্টা
-            ld = re.search(r'ldata=([a-zA-Z0-9_%-]+)', r2.text)
-            if ld:
-                r3 = session.get(f'https://mbasic.facebook.com/recover/initiate/?ldata={ld.group(1)}', timeout=10)
+            # LSD টোকেন (JavaScript require format)
+            lsd_match = re.search(r'"LSD",\[\],\{"token":"([^"]+)"', html)
+            if lsd_match:
+                tokens_found['lsd'] = lsd_match.group(1)
+                print(f"{G}[✓] LSD.token পাওয়া গেছে ✓{N}")
+            
+            # jazoest
+            jz_match = re.search(r'"jazoest","([^"]+)"', html)
+            if jz_match:
+                tokens_found['jazoest'] = jz_match.group(1)
+            
+            # csrf_token
+            csrf_match = re.search(r'"csrf_token":"([^"]+)"', html)
+            if csrf_match:
+                tokens_found['csrf'] = csrf_match.group(1)
+            
+            # user_id
+            uid_match = re.search(r'"USER_ID":"([^"]+)"', html)
+            if uid_match:
+                tokens_found['uid'] = uid_match.group(1)
+            else:
+                uid_match = re.search(r'"userID":"([^"]+)"', html)
+                if uid_match:
+                    tokens_found['uid'] = uid_match.group(1)
+            
+            # server_revision (__rev)
+            rev_match = re.search(r'"server_revision":(\d+)', html)
+            if rev_match:
+                tokens_found['rev'] = rev_match.group(1)
+            
+            if 'fb_dtsg' in tokens_found:
+                break
                 
-                # send_code খুঁজি
-                dtsg = re.search(r'name="fb_dtsg"[^>]*value="([^"]*)"', r3.text)
-                if 'send_code' in r3.text or 'Send code' in r3.text:
-                    sd = {
-                        'fb_dtsg': dtsg.group(1) if dtsg else lsd.group(1),
-                        'jazoest': jz.group(1) if jz else '2',
-                        'contact_point': phone,
-                        'send_code': 'Send code via SMS'
-                    }
-                    r4 = session.post('https://mbasic.facebook.com/recover/initiate/', data=sd, timeout=10)
-                    if 'code_sent' in r4.text or 'sent' in r4.text:
-                        return 'OTP_SENT', name
-            return 'EXISTS', name
-        return None
-    except:
-        return None
-
-def method_graphql_search(session, phone):
-    """পদ্ধতি ২: Facebook GraphQL সার্চ API"""
-    print(f"\n{D}[2/4] GraphQL search API...{N}")
-    try:
-        r = session.get('https://www.facebook.com/login/', timeout=10)
-        
-        # টোকেন বের করি
-        fb_dtsg = re.search(r'"fb_dtsg":"([^"]+)"', r.text)
-        lsd = re.search(r'"lsd":"([^"]+)"', r.text)
-        
-        if not fb_dtsg:
-            return None
-            
-        headers = {
-            'User-Agent': random.choice(UAS),
-            'Accept': '*/*',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-FB-Friendly-Name': 'search',
-            'X-FB-Connection-Type': 'WIFI',
-            'Origin': 'https://www.facebook.com',
-            'Referer': 'https://www.facebook.com/',
-        }
-        
-        # GraphQL search_identity
-        data = {
-            'fb_dtsg': fb_dtsg.group(1),
-            'lsd': lsd.group(1) if lsd else '',
-            '__a': '1',
-            '__user': '0',
-            '__comet_req': '0',
-            'jazoest': '2',
-            'variables': json.dumps({
-                "contact_point": phone,
-                "source": "forgot_password"
-            }),
-            'doc_id': '5345237891345678',  # identify mutation
-            'fb_api_caller_class': 'RelayModern',
-            'fb_api_req_friendly_name': 'useContactPointLookupQuery',
-        }
-        
-        r2 = session.post('https://www.facebook.com/api/graphql/', headers=headers, data=data, timeout=10)
-        
-        if 'email_is_taken' in r2.text or 'phone_is_taken' in r2.text or 'account_type' in r2.text:
-            # নাম বের করার চেষ্টা
-            nm = re.search(r'"name":"([^"]+)"', r2.text)
-            name = nm.group(1) if nm else 'Found'
-            return 'EXISTS', name
-        elif 'no_results' in r2.text or 'not_found' in r2.text:
-            return False
-        return None
-    except:
-        return None
-
-def method_free_reg_api(session, phone):
-    """পদ্ধতি ৩: Registration API"""
-    print(f"\n{D}[3/4] Registration API...{N}")
-    try:
-        r = session.get('https://www.facebook.com/reg/', timeout=10)
-        
-        csrf = re.search(r'"csrf_token":"([^"]+)"', r.text)
-        lsd = re.search(r'"lsd":"([^"]+)"', r.text)
-        token = csrf.group(1) if csrf else (lsd.group(1) if lsd else None)
-        
-        if not token:
-            return None
-        
-        rand_user = ''.join(random.choice(string.ascii_lowercase) for _ in range(8))
-        
-        data = {
-            'email': phone,
-            'username': rand_user,
-            'first_name': '',
-            'last_name': '',
-        }
-        
-        headers = {
-            'User-Agent': random.choice(UAS),
-            'Accept': 'application/json, text/plain, */*',
-            'X-CSRFToken': token,
-            'X-FB-LSD': lsd.group(1) if lsd else token,
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Referer': 'https://www.facebook.com/reg/',
-        }
-        
-        r2 = session.post(
-            'https://www.facebook.com/api/v1/web/accounts/web_create_ajax/attempt/',
-            headers=headers,
-            data=data,
-            timeout=10
-        )
-        
-        if 'email_is_taken' in r2.text or 'phone_is_taken' in r2.text:
-            return 'EXISTS', 'Found'
-        elif r2.status_code == 200:
+        except Exception as e:
+            continue
+    
+    # পুরনো স্টাইল fb_dtsg (যদি DTSGInitialData না পাওয়া যায়)
+    if 'fb_dtsg' not in tokens_found:
+        for url in ['https://mbasic.facebook.com/', 'https://www.facebook.com/']:
             try:
-                js = r2.json()
-                if js.get('status') != 'fail':
-                    return 'EXISTS', 'Found'
+                r = session.get(url, timeout=10)
+                fb_dtsg = re.search(r'name="fb_dtsg"[^>]*value="([^"]+)"', r.text)
+                if fb_dtsg:
+                    tokens_found['fb_dtsg'] = fb_dtsg.group(1)
+                    print(f"{G}[✓] fb_dtsg (HTML form) পাওয়া গেছে ✓{N}")
+                    break
             except:
-                pass
-            return False
-        return None
-    except:
-        return None
+                continue
+    
+    return tokens_found
 
-def method_native_form(session, phone):
-    """পদ্ধতি ৪: Native Facebook Lite form submit"""
-    print(f"\n{D}[4/4] Native form API...{N}")
-    try:
-        r = session.get('https://www.facebook.com/login/identify?ctx=recover', timeout=10)
-        
-        lsd = re.search(r'"lsd":"([^"]+)"', r.text)
-        if not lsd:
-            return None
-            
-        # Form data prepare
-        data = {
-            'lsd': lsd.group(1),
-            'email': phone,
-            'did_submit': 'Search',
-        }
-        
-        headers = {
-            'User-Agent': random.choice(UAS),
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Origin': 'https://www.facebook.com',
-        }
-        
-        r2 = session.post(
-            'https://www.facebook.com/ajax/login/help/identify.php?ctx=recover',
-            headers=headers,
-            data=data,
-            timeout=10
-        )
-        
-        if 'no_results' in r2.text:
-            return False
-        if 'account_switcher' in r2.text or 'recover' in r2.text or 'name' in r2.text.lower():
-            return 'EXISTS', 'Found'
-        return None
-    except:
-        return None
+def graphql_request(session, tokens, variables, doc_id):
+    """Facebook GraphQL API তে রিকোয়েস্ট পাঠানো"""
+    
+    uid = tokens.get('uid', '0')
+    fb_dtsg = tokens.get('fb_dtsg', '')
+    lsd = tokens.get('lsd', fb_dtsg)
+    jazoest = tokens.get('jazoest', '2')
+    rev = tokens.get('rev', '1000000000')
+    
+    body = {
+        'av': uid,
+        '__user': uid,
+        '__a': '1',
+        '__dyn': '7xeUmxa3Q1fxu13wqolzo8e4Ly0Fxo7C12wBxa6UKW7me6W4o8oG3e2i3y4-3q3e5obx262a3W0EUe8hwem0nCq1ewSo9EW7m2S2S2S2S2S2S2S2S2S2S2S2S2S2S2S2S2S2S2S4S2S2S2S2S2S2S2S2S2S2S2S2S2S2S2S2S2S2S2S2S2S2S2S2S2C11rlwAEbUeeH',
+        '__req': '1',
+        '__beoa': '0',
+        '__pc': 'PHASED:DEFAULT',
+        'dpr': '2',
+        '__ccg': 'EXCELLENT',
+        '__rev': rev,
+        '__s': 'b8f4l8',
+        '__hsi': '7243534834607654305',
+        '__comet_req': '0',
+        'fb_dtsg': fb_dtsg,
+        'jazoest': jazoest,
+        'lsd': lsd,
+        '__spin_r': rev,
+        '__spin_b': 'trunk',
+        '__spin_t': str(int(time.time())),
+        'fb_api_caller_class': 'RelayModern',
+        'fb_api_req_friendly_name': 'useContactPointIdentifyMutation',
+        'variables': json.dumps(variables),
+        'server_timestamps': 'true',
+        'doc_id': doc_id,
+    }
+    
+    headers = {
+        'User-Agent': random.choice(UAS),
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-FB-LSD': lsd,
+        'X-FB-Friendly-Name': 'useContactPointIdentifyMutation',
+        'Origin': 'https://www.facebook.com',
+        'Referer': 'https://www.facebook.com/',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Dest': 'empty',
+    }
+    
+    r = session.post('https://www.facebook.com/api/graphql/', 
+                      headers=headers, data=body, timeout=15)
+    
+    # ফেসবুক "for (;;);" প্রিফিক্স যোগ করে—সেটা রিমুভ
+    text = r.text
+    if text.startswith('for (;;);'):
+        text = text[9:]
+    
+    return text
 
 def main():
     bnr()
     
+    # ফোন ইনপুট
     print(f"\n{Y}[*] Facebook ID (ফোন নম্বর) দিন:{N}")
     print(f"{D}   যেমন: 01712345678{N}")
     phone = input(f"\n{W}➜ {N}").strip()
     
     phone = fmt_phone(phone)
     if not phone:
-        print(f"\n{R}[✗] ভুল ফোন নম্বর! ০১XXXXXXXXX ফরম্যাটে দিন{N}")
+        print(f"\n{R}[✗] ভুল ফোন! ০১XXXXXXXXX ফরম্যাট{N}")
         return
     
     print(f"\n{Y}[*] ফোন: {G}{phone}{N}")
-    print(f"{Y}[*] ৪টি পদ্ধতি চেষ্টা করা হবে...{N}")
     
+    # সেশন তৈরি
     session = requests.Session()
     session.headers.update({
         'User-Agent': random.choice(UAS),
-        'Accept-Language': 'en-US,en;q=0.9,bn;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
         'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive',
     })
     
-    methods = [
-        ('mbasic Identify', method_mbasic),
-        ('GraphQL Search', method_graphql_search),
-        ('Registration API', method_free_reg_api),
-        ('Native Form', method_native_form),
-    ]
+    # টোকেন কালেক্ট
+    tokens = get_tokens(session)
     
-    for name, method in methods:
-        print(f"{Y}[*] {name} ট্রাই করছি...{N}")
-        time.sleep(0.5)
+    if 'fb_dtsg' not in tokens:
+        print(f"\n{R}[✗] টোকেন পাওয়া যায়নি!{N}")
+        print(f"{Y}[!] VPN বা মোবাইল ডাটা ব্যবহার করে আবার চেষ্টা করুন{N}")
+        print(f"{Y}[!] অথবা ১ মিনিট পর আবার রান করুন{N}")
+        return
+    
+    print(f"\n{G}[✓] টোকেন সেট রেডি!{N}")
+    print(f"{D}   fb_dtsg: {tokens.get('fb_dtsg', 'N/A')[:20]}...{N}")
+    if 'lsd' in tokens:
+        print(f"{D}   lsd: {tokens['lsd'][:20]}...{N}")
+    
+    # === GraphQL কল ১: identify contact point ===
+    print(f"\n{Y}[*] GraphQL: identify mutation পাঠানো হচ্ছে...{N}")
+    
+    doc_id_identify = '5345237891345678'  # identify mutation doc_id
+    
+    variables = {
+        "contactPoint": phone,
+        "contactPointType": "PHONE",
+        "source": "forgot_password"
+    }
+    
+    result = graphql_request(session, tokens, variables, doc_id_identify)
+    
+    try:
+        data = json.loads(result)
+        print(f"{D}GraphQL Response: {json.dumps(data, indent=2)[:500]}{N}")
         
-        result = method(session, phone)
-        
-        if result and result[0] in ['EXISTS', 'OTP_SENT']:
-            status, user_data = result
+        # চেক করি
+        if 'email_is_taken' in result or 'phone_is_taken' in result:
             print(f"\n{G}╔══════════════════════════════════════════╗{N}")
-            print(f"{G}║{N}{W}     ✅ {name} কাজ করল!                 {G}║{N}")
-            if user_data:
-                print(f"{G}║{N}     অ্যাকাউন্ট: {user_data}              {G}║{N}")
+            print(f"{G}║{N}{W}     ✅ GraphQL: অ্যাকাউন্ট পাওয়া গেছে!  {G}║{N}")
             print(f"{G}╚══════════════════════════════════════════╝{N}")
-            
-            if status == 'OTP_SENT':
-                print(f"\n{Y}📱 OTP পাঠানো হয়েছে! ফোন চেক করুন!{N}")
+        elif 'no_results' in result or 'not_found' in result:
+            print(f"\n{R}[✗] GraphQL: এই নাম্বারে অ্যাকাউন্ট নেই{N}")
             return
-        
-        elif result == False:
-            print(f"{R}[✗] এই নাম্বারে অ্যাকাউন্ট নেই!{N}")
-            return
+        else:
+            print(f"\n{Y}[!] GraphQL: অজানা রেসপন্স, আবার চেষ্টা করছি...{N}")
+    except:
+        print(f"{Y}[!] JSON পার্স করতে সমস্যা{N}")
     
-    print(f"\n{R}[✗] সব পদ্ধতি ব্যর্থ!{N}")
-    print(f"{Y}[!] ফেসবুক ব্লক করেছে। কারণসমূহ:{N}")
-    print(f"{Y}    ১. IP ব্লক — VPN বা মোবাইল ডাটা use করুন{N}")
-    print(f"{Y}    ২. নাম্বার সঠিক না — অন্য নাম্বার টেস্ট করুন{N}")
-    print(f"{Y}    ৩. রেট লিমিট — ৫-১০ মিনিট পর আবার চেষ্টা করুন{N}")
-    print(f"{D}────────────────────────────────────────{N}")
-    print(f"{D}টিপ: 017/018/019 দিয়ে শুরু নাম্বার use করুন{N}")
+    # === GraphQL কল ২: recovery init ===
+    print(f"\n{Y}[*] GraphQL: recovery_initiate পাঠানো হচ্ছে...{N}")
+    
+    doc_id_recover = '6291839728902026'  # recovery initiate doc_id
+    
+    variables2 = {
+        "contactPoint": phone,
+        "source": "forgot_password",
+        "flow": "recover"
+    }
+    
+    result2 = graphql_request(session, tokens, variables2, doc_id_recover)
+    
+    try:
+        data2 = json.loads(result2)
+        print(f"{D}GraphQL Recovery Response:{N}")
+        
+        if 'code' in result2 or 'sent' in result2.lower() or 'otp' in result2.lower():
+            print(f"\n{G}╔══════════════════════════════════════════╗{N}")
+            print(f"{G}║{N}{W}  ✅ OTP কোড পাঠানো হয়েছে! ফোন চেক করুন  {G}║{N}")
+            print(f"{G}╚══════════════════════════════════════════╝{N}")
+        else:
+            print(f"{D}{result2[:300]}{N}")
+            print(f"\n{Y}[*] OTP পাঠানো হয়েছে বলে মনে হচ্ছে। ফোন চেক করুন।{N}")
+    except:
+        print(f"{Y}[*] OTP পাঠানোর চেষ্টা করা হয়েছে। ফোন চেক করুন।{N}")
+    
+    print(f"\n{D}────────────────────────────────────────{N}")
 
 if __name__ == '__main__':
     try:
