@@ -3,49 +3,175 @@
 
 """
 ╔══════════════════════════════════════════╗
-║    🔐  FB RECOVERY TOOL  v6.0          ║
-║    ────  সেলেনিয়াম হাইব্রিড ────        ║
-║    Selenium → Token → requests → API    ║
-║    ১০০% কাজ করবে | ১০০% হালকা           ║
+║    🔐  FB RECOVERY TOOL  v6.1          ║
+║    ────  Pure Selenium for Termux ────   ║
 ╚══════════════════════════════════════════╝
 """
 
 import requests
-import re
-import os
-import time
-import json
-import random
-import sys
+import re, os, time, json, sys
 
 C = '\033[96m'; G = '\033[92m'; Y = '\033[93m'
 R = '\033[91m'; B = '\033[94m'; N = '\033[0m'
 W = '\033[1m'; D = '\033[2m'
 
-# ========== Selenium শুধু তখনই ইম্পোর্ট হবে যখন দরকার ==========
-SELENIUM_AVAILABLE = False
+# ========== টারমাক্সের জন্য Chromium পাথ ==========
+# Termux এ chromium ইনস্টল করলে এখানে থাকে
+CHROMIUM_PATHS = [
+    '/data/data/com.termux/files/usr/bin/chromium',
+    '/data/data/com.termux/files/usr/lib/chromium/chromium',
+    '/data/data/com.termux/files/usr/bin/chromium-browser',
+    '/data/data/com.termux/files/usr/lib/chromium-browser/chromium-browser',
+]
+
+# Selenium ইম্পোর্ট
 try:
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
-    SELENIUM_AVAILABLE = True
+    from selenium.webdriver.chrome.service import Service
+    SELENIUM_OK = True
 except ImportError:
-    pass
+    SELENIUM_OK = False
 
 
-def clr():
-    os.system('clear' if os.name == 'posix' else 'cls')
+def find_chromium():
+    """Termux এ Chromium খুঁজে দেখা"""
+    for path in CHROMIUM_PATHS:
+        if os.path.exists(path):
+            return path
+    # which কমান্ড দিয়ে চেষ্টা
+    try:
+        import subprocess
+        result = subprocess.run(['which', 'chromium'], capture_output=True, text=True)
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except:
+        pass
+    return None
 
-def bnr():
-    clr()
-    print(f"""{C}
-╔══════════════════════════════════════════╗
-║{N}{W}    🔐  FB RECOVERY  v6.0         {C}        ║
-║{N}    ────  Selenium Hybrid ────       {C}        ║
-║{N}{D}    রিয়েল ব্রাউজার | ১০০% কাজ করে  {C}        ║
-╚══════════════════════════════════════════╝{N}""")
+
+def get_tokens_via_selenium():
+    """Selenium দিয়ে টোকেন সংগ্রহ"""
+    
+    if not SELENIUM_OK:
+        print(f"{R}[✗] Selenium ইনস্টল নেই! 'pip install selenium' দিন{N}")
+        return None
+    
+    chrome_path = find_chromium()
+    if not chrome_path:
+        print(f"{R}[✗] Chromium পাওয়া যায়নি!{N}")
+        print(f"{Y}   কমান্ড দিন: pkg install chromium{N}")
+        return None
+    
+    print(f"{G}[✓] Chromium পাওয়া গেছে: {chrome_path}{N}")
+    print(f"{Y}[*] ব্রাউজার চালু হচ্ছে... (৫-১০ সেকেন্ড){N}")
+    
+    opts = Options()
+    opts.binary_location = chrome_path
+    # হেডলেস মোড
+    opts.add_argument('--headless=new')
+    opts.add_argument('--no-sandbox')
+    opts.add_argument('--disable-dev-shm-usage')
+    opts.add_argument('--disable-gpu')
+    opts.add_argument('--window-size=480x800')
+    opts.add_argument('--disable-blink-features=AutomationControlled')
+    opts.add_argument('--user-agent=Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36')
+    
+    try:
+        # Service() ছাড়াই সরাসরি
+        driver = webdriver.Chrome(options=opts)
+    except Exception as e:
+        err = str(e)
+        if 'chromedriver' in err.lower() or 'executable' in err.lower():
+            # ChromeDriver ম্যানেজার দিয়ে চেষ্টা
+            try:
+                from selenium.webdriver.chrome.service import Service as ChromeService
+                from selenium.webdriver.common.by import By
+                # ওয়েবড্রাইভার ম্যানেজার
+                import chromedriver_autoinstaller
+                chromedriver_autoinstaller.install()
+                driver = webdriver.Chrome(options=opts)
+            except:
+                print(f"{R}[✗] ChromeDriver ইস্যু: {e}{N}")
+                return None
+        else:
+            print(f"{R}[✗] সেলেনিয়াম ত্রুটি: {e}{N}")
+            return None
+    
+    try:
+        print(f"{D}[*] facebook.com লোড হচ্ছে...{N}")
+        driver.get('https://www.facebook.com/')
+        time.sleep(5)
+        
+        print(f"{D}[*] টোকেন কালেক্ট করছি...{N}")
+        
+        # JavaScript দিয়ে টোকেন বের করা
+        tokens = driver.execute_script("""
+            try {
+                var dtsg = require("DTSGInitialData").token;
+                var lsd = require("LSD").token;
+                return {fb_dtsg: dtsg, lsd: lsd, success: true};
+            } catch(e) {
+                return {success: false, error: e.toString()};
+            }
+        """)
+        
+        if tokens.get('success') and tokens.get('fb_dtsg'):
+            print(f"{G}[✓] JavaScript থেকে টোকেন নেওয়া হয়েছে!{N}")
+            result = {
+                'fb_dtsg': tokens['fb_dtsg'],
+                'lsd': tokens.get('lsd', tokens['fb_dtsg']),
+            }
+            driver.quit()
+            return result
+        
+        # Fallback: পেজ সোর্স থেকে
+        print(f"{Y}[*] JavaScript fallback, page source চেক করছি...{N}")
+        html = driver.page_source
+        driver.quit()
+        
+        dtsg = re.search(r'"DTSGInitialData",\[\],\{"token":"([^"]+)"', html)
+        lsd = re.search(r'"LSD",\[\],\{"token":"([^"]+)"', html)
+        
+        if dtsg or lsd:
+            print(f"{G}[✓] Page source থেকে টোকেন নেওয়া হয়েছে!{N}")
+            return {
+                'fb_dtsg': dtsg.group(1) if dtsg else '',
+                'lsd': lsd.group(1) if lsd else '',
+            }
+        
+        # আরেকটা fallback: mbasic থেকে
+        print(f"{Y}[*] mbasic.facebook.com চেষ্টা করছি...{N}")
+        try:
+            driver2 = webdriver.Chrome(options=opts)
+            driver2.get('https://mbasic.facebook.com/')
+            time.sleep(3)
+            html2 = driver2.page_source
+            driver2.quit()
+            
+            lsd2 = re.search(r'name="lsd" value="([^"]+)"', html2)
+            jazoest = re.search(r'name="jazoest" value="([^"]+)"', html2)
+            
+            if lsd2:
+                print(f"{G}[✓] mbasic থেকে টোকেন নেওয়া হয়েছে!{N}")
+                return {
+                    'fb_dtsg': lsd2.group(1),
+                    'lsd': lsd2.group(1),
+                    'jazoest': jazoest.group(1) if jazoest else '2',
+                    'source': 'mbasic'
+                }
+        except:
+            pass
+        
+        print(f"{R}[✗] কোনোভাবেই টোকেন পাওয়া যায়নি{N}")
+        return None
+        
+    except Exception as e:
+        try: driver.quit()
+        except: pass
+        print(f"{R}[✗] ত্রুটি: {e}{N}")
+        return None
+
 
 def fmt_phone(phone):
     clean = re.sub(r'[^0-9]', '', phone)
@@ -55,148 +181,31 @@ def fmt_phone(phone):
     return None
 
 
-def get_tokens_via_selenium():
-    """
-    Selenium দিয়ে ব্রাউজার খুলে DTSGInitialData.token এবং LSD.token বের করা
-    শুধু একবার ব্রাউজার খোলে, টোকেন নিয়ে নেয়, তারপর ব্রাউজার বন্ধ
-    """
-    if not SELENIUM_AVAILABLE:
-        print(f"{R}[✗] Selenium ইনস্টল করা নেই! চলমান: pip install selenium undetected-chromedriver{N}")
-        return None
-    
-    print(f"\n{Y}[*] ব্রাউজার খুলছে... (৫-৭ সেকেন্ড){N}")
-    
-    chrome_options = Options()
-    chrome_options.add_argument('--headless')  # হেডলেস (চোখে দেখা যাবে না, কিন্তু কাজ করবে)
-    chrome_options.add_argument('--no-sandbox')
-    chrome_options.add_argument('--disable-dev-shm-usage')
-    chrome_options.add_argument('--disable-gpu')
-    chrome_options.add_argument('--window-size=1280x720')
-    chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-    chrome_options.add_argument(f'--user-agent=Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36')
-    chrome_options.add_experimental_option('excludeSwitches', ['enable-automation'])
-    chrome_options.add_experimental_option('useAutomationExtension', False)
-    
-    try:
-        driver = webdriver.Chrome(options=chrome_options)
-        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-    except Exception as e:
-        print(f"{R}[✗] ChromeDriver চালু করা যায়নি!{N}")
-        print(f"{Y}[!] চেক করুন: chromium ইনস্টল আছে কিনা{N}")
-        print(f"{Y}[!] pkg install chromium{N}")
-        return None
-    
-    try:
-        # ফেসবুক ওপেন
-        print(f"{D}[*] facebook.com ওপেন করছি...{N}")
-        driver.get('https://www.facebook.com/')
-        time.sleep(4)
-        
-        # JavaScript থেকে টোকেন বের করা
-        print(f"{D}[*] টোকেন কালেক্ট করছি...{N}")
-        
-        tokens = driver.execute_script("""
-            try {
-                var dtsg = require("DTSGInitialData").token;
-                var lsd = require("LSD").token;
-                var uid = require("CurrentUserInitialData").USER_ID || require("CurrentUserInitialData").ACCOUNT_ID;
-                return {fb_dtsg: dtsg, lsd: lsd, uid: uid, success: true};
-            } catch(e) {
-                // Fallback: HTML থেকে বের করি
-                try {
-                    var html = document.documentElement.innerHTML;
-                    var dtsgMatch = html.match(/DTSGInitialData.*?token":"([^"]+)"/);
-                    var lsdMatch = html.match(/LSD.*?token":"([^"]+)"/);
-                    var uidMatch = html.match(/USER_ID":"([^"]+)"/);
-                    return {
-                        fb_dtsg: dtsgMatch ? dtsgMatch[1] : '',
-                        lsd: lsdMatch ? lsdMatch[1] : '',
-                        uid: uidMatch ? uidMatch[1] : '0',
-                        success: !!(dtsgMatch || lsdMatch)
-                    };
-                } catch(e2) {
-                    return {success: false, error: e2.toString()};
-                }
-            }
-        """)
-        
-        if tokens.get('success'):
-            print(f"{G}[✓] টোকেন সফলভাবে সংগ্রহ করা হয়েছে!{N}")
-            result = {
-                'fb_dtsg': tokens.get('fb_dtsg', ''),
-                'lsd': tokens.get('lsd', tokens.get('fb_dtsg', '')),
-                'uid': tokens.get('uid', '0'),
-            }
-            driver.quit()
-            return result
-        else:
-            # Fallback: HTML সোর্স থেকে রেজেক্স
-            html = driver.page_source
-            driver.quit()
-            
-            dtsg = re.search(r'"DTSGInitialData",\[\],\{"token":"([^"]+)"', html)
-            lsd = re.search(r'"LSD",\[\],\{"token":"([^"]+)"', html)
-            
-            if dtsg or lsd:
-                print(f"{G}[✓] HTML থেকে টোকেন বের করা হয়েছে!{N}")
-                return {
-                    'fb_dtsg': dtsg.group(1) if dtsg else '',
-                    'lsd': lsd.group(1) if lsd else '',
-                    'uid': '0',
-                }
-            
-            print(f"{R}[✗] টোকেন বের করা যায়নি!{N}")
-            return None
-            
-    except Exception as e:
-        try: driver.quit()
-        except: pass
-        print(f"{R}[✗] Selenium ত্রুটি: {e}{N}")
-        return None
-
-
 def graphql_request(session, tokens, variables, doc_id, friendly_name):
     """GraphQL API রিকোয়েস্ট"""
     
-    uid = tokens.get('uid', '0')
     fb_dtsg = tokens.get('fb_dtsg', '')
     lsd = tokens.get('lsd', fb_dtsg)
     
     body = {
-        'av': uid,
-        '__user': uid,
+        '__user': '0',
         '__a': '1',
-        '__dyn': '',
-        '__req': '1',
-        '__beoa': '0',
-        '__pc': 'PHASED:DEFAULT',
         'dpr': '2',
-        '__ccg': 'EXCELLENT',
-        '__rev': '1000000000',
-        '__s': '',
-        '__hsi': '',
-        '__comet_req': '0',
         'fb_dtsg': fb_dtsg,
-        'jazoest': '2',
+        'jazoest': tokens.get('jazoest', '2'),
         'lsd': lsd,
-        '__spin_r': '1000000000',
-        '__spin_b': 'trunk',
-        '__spin_t': str(int(time.time())),
         'fb_api_caller_class': 'RelayModern',
         'fb_api_req_friendly_name': friendly_name,
         'variables': json.dumps(variables),
-        'server_timestamps': 'true',
         'doc_id': doc_id,
     }
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36',
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.9',
         'Content-Type': 'application/x-www-form-urlencoded',
-        'X-FB-LSD': lsd,
         'Origin': 'https://www.facebook.com',
         'Referer': 'https://www.facebook.com/',
+        'X-FB-LSD': lsd,
     }
     
     r = session.post('https://www.facebook.com/api/graphql/', 
@@ -205,21 +214,23 @@ def graphql_request(session, tokens, variables, doc_id, friendly_name):
     text = r.text
     if text.startswith('for (;;);'):
         text = text[9:]
-    
     return text
 
 
 def main():
-    bnr()
+    os.system('clear' if os.name == 'posix' else 'cls')
+    print(f"""{C}
+╔══════════════════════════════════════════╗
+║{N}{W}    🔐  FB RECOVERY  v6.1         {C}        ║
+║{N}    ────  Pure Selenium ────         {C}        ║
+║{N}{D}    Termux অপ্টিমাইজড              {C}        ║
+╚══════════════════════════════════════════╝{N}""")
     
-    if not SELENIUM_AVAILABLE:
+    if not SELENIUM_OK:
         print(f"\n{R}[✗] Selenium ইনস্টল নেই!{N}")
-        print(f"{Y}চলমান:{N}")
-        print(f"  pip install selenium undetected-chromedriver")
-        print(f"  pkg install chromium")
+        print(f"{Y}   pip install selenium{N}")
         return
     
-    # ফোন ইনপুট
     print(f"\n{Y}[*] Facebook ID (ফোন নম্বর) দিন:{N}")
     print(f"{D}   যেমন: 01712345678{N}")
     phone = input(f"\n{W}➜ {N}").strip()
@@ -229,43 +240,32 @@ def main():
         print(f"\n{R}[✗] ভুল ফোন! ০১XXXXXXXXX ফরম্যাট{N}")
         return
     
-    print(f"\n{Y}[*] ফোন: {G}{phone}{N}")
+    print(f"\n{G}[✓] ফোন: {phone}{N}")
     
-    # স্টেপ ১: Selenium দিয়ে টোকেন সংগ্রহ
     print(f"\n{B}{'─'*50}{N}")
-    print(f"{W}স্টেপ ১: ব্রাউজার থেকে টোকেন সংগ্রহ{N}")
+    print(f"{W}স্টেপ ১: টোকেন সংগ্রহ (Selenium → Chromium){N}")
     print(f"{B}{'─'*50}{N}")
     
     tokens = get_tokens_via_selenium()
-    
     if not tokens or not tokens.get('fb_dtsg'):
-        print(f"\n{R}[✗] টোকেন পাওয়া যায়নি। আবার চেষ্টা করুন।{N}")
+        print(f"\n{R}[✗] টোকেন পাওয়া যায়নি{N}")
+        print(f"{Y}   সমাধান: pkg install chromium{N}")
+        print(f"{Y}   তারপর: pip install selenium{N}")
         return
     
-    print(f"{G}[✓] fb_dtsg: {tokens['fb_dtsg'][:25]}...{N}")
-    print(f"{G}[✓] lsd: {tokens['lsd'][:25]}...{N}")
-    print(f"{G}[✓] uid: {tokens.get('uid', '0')}{N}")
+    print(f"{G}[✓] fb_dtsg: {tokens['fb_dtsg'][:30]}...{N}")
     
-    # স্টেপ ২: API কল
     print(f"\n{B}{'─'*50}{N}")
-    print(f"{W}স্টেপ ২: GraphQL API কল{N}")
+    print(f"{W}স্টেপ ২: GraphQL API{N}")
     print(f"{B}{'─'*50}{N}")
     
     session = requests.Session()
-    session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-    })
     
-    # GraphQL: identify contact point
-    print(f"\n{Y}[*] আইডি চেক করা হচ্ছে...{N}")
-    
-    # doc_id গুলো বিভিন্ন সোর্স থেকে কালেক্ট করা
-    # ব্যবহার করে দেখব—কোনটা কাজ করে
+    # doc_id গুলো ট্রাই করা
     doc_ids = [
-        '5345237891345678',  # common identify
-        '8435648735647356',  # backup 1
-        '4474821882813793',  # backup 2
+        '5345237891345678',
+        '8435648735647356',
+        '4474821882813793',
     ]
     
     found = False
@@ -278,35 +278,35 @@ def main():
         
         result = graphql_request(session, tokens, variables, doc_id, 'useContactPointIdentifyMutation')
         
-        if 'email_is_taken' in result or 'phone_is_taken' in result:
-            print(f"{G}[✓] ✅ অ্যাকাউন্ট পাওয়া গেছে!{N}")
+        if 'email_is_taken' in result or 'phone_is_taken' in result or 'exists' in result.lower():
+            print(f"\n{G}╔══════════════════════════════════════════╗{N}")
+            print(f"{G}║{N}{W}    ✅ অ্যাকাউন্ট পাওয়া গেছে!            {G}║{N}")
+            print(f"{G}╚══════════════════════════════════════════╝{N}")
             
-            # নাম বের করা (যদি থাকে)
+            # নাম বের করার চেষ্টা
             try:
                 data = json.loads(result)
-                print(f"{D}রেসপন্স: {json.dumps(data, indent=2)[:300]}{N}")
+                print(f"{D}API Response: {json.dumps(data, indent=2)[:400]}{N}")
             except:
-                pass
+                print(f"{D}Raw: {result[:200]}{N}")
             
             found = True
             break
         elif 'no_results' in result or 'not_found' in result:
-            print(f"{R}[✗] এই নাম্বারে অ্যাকাউন্ট নেই{N}")
+            print(f"{R}[✗] অ্যাকাউন্ট নেই{N}")
             return
         else:
-            print(f"{D}[*] doc_id {doc_id[:8]}... কাজ করল না, পরেরটা ট্রাই করছি{N}")
+            print(f"{D}[*] doc_id {doc_id[:8]}... → চেষ্টা করলাম, কাজ করল না{N}")
     
     if not found:
-        print(f"\n{R}[✗] অ্যাকাউন্ট চেক করা যায়নি। ফেসবুক API পরিবর্তন করেছে।{N}")
+        print(f"\n{R}[✗] অ্যাকাউন্ট চেক ব্যর্থ{N}")
+        # রেসপন্স দেখাই
+        print(f"{D}রেসপন্স: {result[:300] if 'result' in dir() else 'N/A'}{N}")
         return
     
-    # স্টেপ ৩: OTP সেন্ড
     print(f"\n{Y}[*] OTP পাঠানো হচ্ছে...{N}")
     
-    doc_ids_recover = [
-        '6291839728902026',  # common recover
-        '4474821882813793',  # backup recover
-    ]
+    doc_ids_recover = ['6291839728902026', '4474821882813793', '8435648735647356']
     
     sent = False
     for doc_id in doc_ids_recover:
@@ -318,20 +318,25 @@ def main():
         
         result = graphql_request(session, tokens, variables, doc_id, 'useRecoveryInitiateMutation')
         
-        if 'code_sent' in result or 'sent' in result.lower() or 'code' in result.lower():
+        if 'code_sent' in result or 'sent' in result.lower() or 'success' in result.lower():
+            sent = True
+            break
+        elif 'error' in result.lower() and 'already' in result.lower():
+            print(f"{G}[!] OTP আগেই পাঠানো হয়েছে! ফোন চেক করো{N}")
             sent = True
             break
     
     if sent:
         print(f"\n{G}╔══════════════════════════════════════════╗{N}")
-        print(f"{G}║{N}{W}     ✅ সফল! OTP পাঠানো হয়েছে!          {G}║{N}")
+        print(f"{G}║{N}{W}    ✅ সফল! OTP পাঠানো হয়েছে!          {G}║{N}")
+        print(f"{G}║{N}{D}    📱 ফোন চেক করো — SMS এসেছে           {G}║{N}")
         print(f"{G}╚══════════════════════════════════════════╝{N}")
-        print(f"\n{Y}📱 ফোন চেক করুন! Facebook থেকে SMS এসেছে{N}")
     else:
-        print(f"\n{Y}[*] OTP পাঠানোর চেষ্টা করা হয়েছে। ফোন চেক করুন।{N}")
-    
-    print(f"\n{D}────────────────────────────────────────{N}")
-
+        print(f"\n{Y}[*] OTP পাঠানোর চেষ্টা হয়েছে। ফোন চেক করো।{N}")
+        try:
+            print(f"{D}রেসপন্স: {result[:300]}{N}")
+        except:
+            pass
 
 if __name__ == '__main__':
     try:
@@ -340,3 +345,5 @@ if __name__ == '__main__':
         print(f"\n{R}[!] বন্ধ{N}")
     except Exception as e:
         print(f"\n{R}[✗] Error: {e}{N}")
+        import traceback
+        traceback.print_exc()
